@@ -1,0 +1,91 @@
+{
+  "info": {
+    "name": "Jendie Inventory API",
+    "_postman_id": "8e2450e3-42b9-4b54-86f8-452b21b3c1a2",
+    "description": "Postman Collection for testing Jendie Inventory API hosted on Railway",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Register User",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"kennedy\",\n  \"password\": \"Admin@2025\",\n  \"role\": \"admin\"\n}"
+        },
+        "url": "{{base_url}}/api/auth/register"
+      }
+    },
+    {
+      "name": "Login User",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"kennedy\",\n  \"password\": \"Admin@2025\"\n}"
+        },
+        "url": "{{base_url}}/api/auth/login"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Inventory",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{base_url}}/api/inventory"
+      }
+    },
+    {
+      "name": "Add Inventory Item",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Car Battery\",\n  \"quantity\": 10,\n  \"price\": 4500,\n  \"dealerId\": 1\n}"
+        },
+        "url": "{{base_url}}/api/inventory"
+      }
+    },
+    {
+      "name": "List Dealers",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{base_url}}/api/dealers"
+      }
+    },
+    {
+      "name": "Record Sale",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inventoryId\": 1,\n  \"quantitySold\": 2,\n  \"totalAmount\": 9000\n}"
+        },
+        "url": "{{base_url}}/api/sales"
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4000" },
+    { "key": "token", "value": "" }
+  ]
+}
