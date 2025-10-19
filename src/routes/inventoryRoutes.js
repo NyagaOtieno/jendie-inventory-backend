@@ -1,12 +1,22 @@
-const express = require('express');
+import express from "express";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 const router = express.Router();
-const { auth } = require('../middleware/authMiddleware');
-const { listInventory, getInventory, createInventory, updateInventory, deleteInventory } = require('../controllers/inventoryController');
 
-router.get('/', auth, listInventory);
-router.get('/:id', auth, getInventory);
-router.post('/', auth, createInventory);
-router.put('/:id', auth, updateInventory);
-router.delete('/:id', auth, deleteInventory);
+router.get("/", async (req, res) => {
+  const inventory = await prisma.inventory.findMany({ include: { dealer: true } });
+  res.json(inventory);
+});
 
-module.exports = router;
+router.post("/", async (req, res) => {
+  try {
+    const item = await prisma.inventory.create({ data: req.body });
+    res.status(201).json(item);
+  } catch (error) {
+    console.error("Inventory error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+export default router;
