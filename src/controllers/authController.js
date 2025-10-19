@@ -15,7 +15,9 @@ const registerController = async (req, res) => {
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) return res.status(400).json({ message: 'User already exists' });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
 
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -34,10 +36,18 @@ const registerController = async (req, res) => {
       expiresIn: process.env.JWT_EXPIRES_IN,
     });
 
-    // Return response
-    res.status(201).json({ user, token });
+    // Return response (without password)
+    const { password: _, ...userWithoutPassword } = user;
+    res.status(201).json({ user: userWithoutPassword, token });
+
   } catch (err) {
-    console.error(err);
+    console.error('Register error:', err);
+
+    // Prisma unique constraint error handling
+    if (err.code === 'P2002' && err.meta?.target?.includes('email')) {
+      return res.status(400).json({ message: 'Email already in use' });
+    }
+
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -63,9 +73,12 @@ const loginController = async (req, res) => {
       expiresIn: process.env.JWT_EXPIRES_IN,
     });
 
-    res.json({ user, token });
+    // Return response (without password)
+    const { password: _, ...userWithoutPassword } = user;
+    res.json({ user: userWithoutPassword, token });
+
   } catch (err) {
-    console.error(err);
+    console.error('Login error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
