@@ -1,4 +1,4 @@
-const app = require('./src/app');
+const app = require('./src/app'); // <-- point to src/app.js
 const dotenv = require('dotenv');
 
 dotenv.config();
