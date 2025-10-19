@@ -1,17 +1,16 @@
 {
   "name": "jendie-backend",
   "version": "1.0.0",
-  "description": "Backend for Jendie Speed Governor Inventory System (Express + Prisma + PostgreSQL + JWT)",
-  "main": "src/index.js",
+  "description": "Backend for Jendie Speed Governor Inventory System",
+  "main": "server.js",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
+    "dev": "nodemon server.js",
+    "start": "node server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init"
   },
   "dependencies": {
     "@prisma/client": "^5.0.0",
-    "bcrypt": "^5.1.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",

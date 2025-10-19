@@ -1,32 +1,14 @@
+// src/controllers/dealerController.js
 const prisma = require('../prismaClient');
-
-const listDealers = async (req, res) => {
-  try {
-    const dealers = await prisma.dealer.findMany({ orderBy: { createdAt: 'desc' } });
-    res.json(dealers);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-const getDealer = async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const dealer = await prisma.dealer.findUnique({ where: { id } });
-    if (!dealer) return res.status(404).json({ message: 'Dealer not found' });
-    res.json(dealer);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
 
 const createDealer = async (req, res) => {
   try {
-    const { name, contact, location, defaultPrice } = req.body;
+    const { name, email, phone } = req.body;
+    const existing = await prisma.dealer.findUnique({ where: { email } });
+    if (existing) return res.status(400).json({ message: 'Dealer already exists' });
+
     const dealer = await prisma.dealer.create({
-      data: { name, contact, location, defaultPrice: defaultPrice || null }
+      data: { name, email, phone },
     });
     res.status(201).json(dealer);
   } catch (err) {
@@ -35,19 +17,16 @@ const createDealer = async (req, res) => {
   }
 };
 
-const updateDealer = async (req, res) => {
+const getDealers = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    const { name, contact, location, defaultPrice } = req.body;
-    const dealer = await prisma.dealer.update({
-      where: { id },
-      data: { name, contact, location, defaultPrice: defaultPrice || null }
+    const dealers = await prisma.dealer.findMany({
+      include: { inventory: true },
     });
-    res.json(dealer);
+    res.json(dealers);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-module.exports = { listDealers, createDealer, updateDealer, getDealer };
+module.exports = { createDealer, getDealers };

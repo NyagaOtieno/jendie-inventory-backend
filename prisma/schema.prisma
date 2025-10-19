@@ -1,51 +1,62 @@
+// Specify the database provider
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL") // Add your PostgreSQL URL in .env
 }
+
+// -----------------------------
+// Models
+// -----------------------------
 
 model User {
   id        Int      @id @default(autoincrement())
-  name      String
+  username  String
   email     String   @unique
   password  String
-  role      String   @default("admin")
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Optional relation to Sales if you want to track who made the sale
+  sales     Sale[]
 }
 
 model Dealer {
-  id           Int      @id @default(autoincrement())
-  name         String
-  contact      String?
-  location     String?
-  defaultPrice Decimal? @db.Decimal(10, 2)
-  createdAt    DateTime @default(now())
-  inventories  Inventory[]
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  phone     String?  // Optional phone number
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inventory Inventory[] // One dealer can have multiple inventory items
 }
 
 model Inventory {
-  id           Int      @id @default(autoincrement())
-  serialNumber String   @unique
-  simCard      String   @unique
-  model        String?
-  status       String   @default("Available")
-  dealer       Dealer?  @relation(fields: [dealerId], references: [id])
-  dealerId     Int?
-  sellingPrice Decimal? @db.Decimal(10, 2)
-  purchaseDate DateTime?
-  createdAt    DateTime @default(now())
-  sales        Sale[]
+  id        Int      @id @default(autoincrement())
+  name      String
+  quantity  Int
+  price     Float
+  dealerId  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dealer    Dealer   @relation(fields: [dealerId], references: [id])
+  sales     Sale[]
 }
 
 model Sale {
-  id           Int      @id @default(autoincrement())
-  inventory    Inventory @relation(fields: [inventoryId], references: [id])
-  inventoryId  Int
-  buyerType    String
-  buyerName    String
-  sellingPrice Decimal  @db.Decimal(10, 2)
-  saleDate     DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  productId  Int
+  quantity   Int
+  totalPrice Float
+  userId     Int?     // Optional, if you want to track which user made the sale
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  product    Inventory @relation(fields: [productId], references: [id])
+  user       User?     @relation(fields: [userId], references: [id])
 }

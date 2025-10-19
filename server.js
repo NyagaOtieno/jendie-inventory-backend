@@ -1,5 +1,4 @@
-// server.js
-const app = require('./src/app');  // Correct import of the app configuration
+const app = require('./src/app');
 const dotenv = require('dotenv');
 
 dotenv.config();

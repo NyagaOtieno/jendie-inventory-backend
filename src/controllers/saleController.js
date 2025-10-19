@@ -1,22 +1,28 @@
+// src/controllers/saleController.js
 const prisma = require('../prismaClient');
 
 const createSale = async (req, res) => {
   try {
-    const { inventoryId, buyerType, buyerName, sellingPrice } = req.body;
-    // Validate inventory
-    const inventory = await prisma.inventory.findUnique({ where: { id: inventoryId }});
-    if (!inventory) return res.status(404).json({ message: 'Inventory not found' });
-    if (inventory.status === 'Sold') return res.status(400).json({ message: 'Already sold' });
-    const sale = await prisma.sale.create({
-      data: {
-        inventoryId,
-        buyerType,
-        buyerName,
-        sellingPrice
-      }
+    const { productId, quantity, userId } = req.body;
+
+    // Fetch product to calculate total price
+    const product = await prisma.inventory.findUnique({ where: { id: productId } });
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+
+    if (quantity > product.quantity) return res.status(400).json({ message: 'Not enough stock' });
+
+    const totalPrice = product.price * quantity;
+
+    // Update inventory quantity
+    await prisma.inventory.update({
+      where: { id: productId },
+      data: { quantity: product.quantity - quantity },
     });
-    // update inventory status
-    await prisma.inventory.update({ where: { id: inventoryId }, data: { status: 'Sold', sellingPrice }});
+
+    const sale = await prisma.sale.create({
+      data: { productId, quantity, totalPrice, userId },
+    });
+
     res.status(201).json(sale);
   } catch (err) {
     console.error(err);
@@ -24,9 +30,11 @@ const createSale = async (req, res) => {
   }
 };
 
-const listSales = async (req, res) => {
+const getSales = async (req, res) => {
   try {
-    const sales = await prisma.sale.findMany({ orderBy: { saleDate: 'desc' }, include: { inventory: true }});
+    const sales = await prisma.sale.findMany({
+      include: { product: true, user: true },
+    });
     res.json(sales);
   } catch (err) {
     console.error(err);
@@ -34,4 +42,4 @@ const listSales = async (req, res) => {
   }
 };
 
-module.exports = { createSale, listSales };
+module.exports = { createSale, getSales };
