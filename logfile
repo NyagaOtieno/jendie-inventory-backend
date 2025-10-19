@@ -1,0 +1,2 @@
+2025-10-19 10:32:43.111 EAT [10448] FATAL:  lock file "postmaster.pid" already exists
+2025-10-19 10:32:43.111 EAT [10448] HINT:  Is another postmaster (PID 29000) running in data directory "C:/PostgreSQL/data"?

@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+}
+
+model Dealer {
+  id           Int      @id @default(autoincrement())
+  name         String
+  contact      String?
+  location     String?
+  defaultPrice Decimal? @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+  inventories  Inventory[]
+}
+
+model Inventory {
+  id           Int      @id @default(autoincrement())
+  serialNumber String   @unique
+  simCard      String   @unique
+  model        String?
+  status       String   @default("Available")
+  dealer       Dealer?  @relation(fields: [dealerId], references: [id])
+  dealerId     Int?
+  sellingPrice Decimal? @db.Decimal(10, 2)
+  purchaseDate DateTime?
+  createdAt    DateTime @default(now())
+  sales        Sale[]
+}
+
+model Sale {
+  id           Int      @id @default(autoincrement())
+  inventory    Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId  Int
+  buyerType    String
+  buyerName    String
+  sellingPrice Decimal  @db.Decimal(10, 2)
+  saleDate     DateTime @default(now())
+}
