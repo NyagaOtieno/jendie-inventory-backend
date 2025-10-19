@@ -1,17 +1,18 @@
+// src/app.js
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const authRoutes = require('./routes/authRoutes'); // CommonJS module
+const authRoutes = require('./routes/authRoutes'); // Ensure this path is correct
 
 dotenv.config();
 
 const app = express();
 
-// Middleware
+// Middleware setup
 app.use(cors());
 app.use(express.json());
 
-// Routes
+// Use routes
 app.use('/api/auth', authRoutes);
 
 // Default route
