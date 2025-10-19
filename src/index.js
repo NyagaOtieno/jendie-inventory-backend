@@ -12,14 +12,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/sales', saleRoutes);
 
+// Health check
 app.get('/', (req, res) => res.send('Jendie Backend is running'));
 
+// Server start
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
