@@ -1,8 +1,27 @@
 const express = require('express');
-const { getInventory, createInventory } = require('../controllers/inventoryController');
+const {
+  getAllInventory,
+  getInventoryById,
+  createInventory,
+  updateInventory,
+  deleteInventory,
+} = require('../controllers/inventoryController');
+
 const router = express.Router();
 
-router.get('/', getInventory);
+// ✅ Fetch all inventory items
+router.get('/', getAllInventory);
+
+// ✅ Fetch a single inventory item by ID
+router.get('/:id', getInventoryById);
+
+// ✅ Create a new inventory record
 router.post('/', createInventory);
+
+// ✅ Update an inventory record
+router.put('/:id', updateInventory);
+
+// ✅ Delete an inventory record
+router.delete('/:id', deleteInventory);
 
 module.exports = router;
