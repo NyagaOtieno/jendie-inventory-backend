@@ -1,11 +1,12 @@
 // src/app.js
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const authRoutes = require('./routes/authRoutes');
-const dealerRoutes = require('./routes/dealerRoutes');
-const inventoryRoutes = require('./routes/inventoryRoutes');
-const saleRoutes = require('./routes/saleRoutes');
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+
+import authRoutes from './routes/authRoutes.js';
+import dealerRoutes from './routes/dealerRoutes.js';
+import inventoryRoutes from './routes/inventoryRoutes.js';
+import saleRoutes from './routes/saleRoutes.js';
 
 dotenv.config();
 
@@ -36,4 +37,4 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
-module.exports = app;
+export default app;

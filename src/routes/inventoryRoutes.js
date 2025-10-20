@@ -1,3 +1,4 @@
+// src/routes/inventoryRoutes.js
 import express from 'express';
 import {
   getAllInventory,

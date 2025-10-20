@@ -1,7 +1,7 @@
 // server.js
-const dotenv = require('dotenv');
-const http = require('http');
-const app = require('./src/app');
+import dotenv from 'dotenv';
+import http from 'http';
+import app from './src/app.js'; // note the .js extension for ESM
 
 dotenv.config();
 
