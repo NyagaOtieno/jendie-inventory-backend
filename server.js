@@ -1,19 +1,23 @@
 // server.js
 const dotenv = require('dotenv');
-dotenv.config();
-
+const http = require('http');
 const app = require('./src/app');
 
-const PORT = process.env.PORT || 8080; // Use 8080 as default for Railway
+dotenv.config();
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const PORT = process.env.PORT || 8080;
+
+// ✅ Must listen on 0.0.0.0 for Railway
+const server = http.createServer(app);
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Jendie Backend running on port ${PORT}`);
 });
 
-// Handle unhandled promise rejections and uncaught exceptions
+// ✅ Graceful error handling
 process.on('unhandledRejection', (err) => {
-  console.error('Unhandled Promise Rejection:', err);
+  console.error('❌ Unhandled Promise Rejection:', err);
 });
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
+  console.error('❌ Uncaught Exception:', err);
 });
