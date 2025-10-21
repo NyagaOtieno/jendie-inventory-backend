@@ -23,26 +23,24 @@ const createSale = async (req, res) => {
           where: {
             serialNumber: item.serialNumber,
             simNumber: item.simNumber,
+            status: 'available', // only allow available SerialSims
           },
           include: { inventory: true },
         });
 
         if (!serialSim) {
-          throw new Error(`Serial-SIM pair not found: ${item.serialNumber} / ${item.simNumber}`);
+          throw new Error(
+            `Serial-SIM pair not found or already sold: ${item.serialNumber} / ${item.simNumber}`
+          );
         }
 
-        // 2️⃣ Prevent double-selling
-        if (serialSim.status === 'sold') {
-          throw new Error(`Serial-SIM already sold: ${item.serialNumber}`);
-        }
-
-        // 3️⃣ Mark SerialSim as sold
-        await tx.serialSim.update({
+        // 2️⃣ Mark SerialSim as sold
+        const updatedSerialSim = await tx.serialSim.update({
           where: { id: serialSim.id },
           data: { status: 'sold' },
         });
 
-        // 4️⃣ Create the Sale record
+        // 3️⃣ Create the Sale record
         const sale = await tx.sale.create({
           data: {
             productId: serialSim.inventoryId,
@@ -59,7 +57,7 @@ const createSale = async (req, res) => {
 
         createdSales.push({
           sale,
-          serialSim: { ...serialSim, status: 'sold' },
+          serialSim: updatedSerialSim,
         });
       }
 

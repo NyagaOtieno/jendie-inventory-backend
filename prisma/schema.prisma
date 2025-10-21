@@ -61,11 +61,9 @@ model SerialSim {
   serialNumber String @unique
   simNumber    String @unique
   inventoryId  Int
-
-  // 👇 Relationship to Inventory
-  inventory Inventory @relation(fields: [inventoryId], references: [id])
-
-  createdAt DateTime @default(now())
+  inventory    Inventory @relation(fields: [inventoryId], references: [id])
+  createdAt    DateTime @default(now())
+  status       String  @default("available") // ✅ Add this
 }
 
 // --------------------------------------
