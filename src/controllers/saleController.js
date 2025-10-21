@@ -4,71 +4,70 @@ const prisma = require('../prismaClient');
 /**
  * ✅ Create Sale
  * Supports dealer or direct sale
- * Rolls back inventory if any step fails
+ * Marks SerialSim as sold and rolls back if any step fails
  */
 const createSale = async (req, res) => {
-  const { dealerId, clientName, salePrice, saleDate, items, userId } = req.body;
+  const { dealerId, userId, saleItems, negotiatedPrice, isDirectSale } = req.body;
 
-  if (!items || !items.length) {
+  if (!saleItems || !saleItems.length) {
     return res.status(400).json({ message: 'No sale items provided.' });
   }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // Validate and update all inventory items
-      const updatedInventory = [];
+      const createdSales = [];
 
-      for (const item of items) {
-        const inventoryItem = await tx.inventory.findFirst({
+      for (const item of saleItems) {
+        // 1️⃣ Find the SerialSim
+        const serialSim = await tx.serialSim.findFirst({
           where: {
             serialNumber: item.serialNumber,
-            simNumber: item.simCardNumber,
-            status: 'available',
+            simNumber: item.simNumber,
           },
+          include: { inventory: true },
         });
 
-        if (!inventoryItem) {
-          throw new Error(`Inventory item not found or already sold: ${item.serialNumber}`);
+        if (!serialSim) {
+          throw new Error(`Serial-SIM pair not found: ${item.serialNumber} / ${item.simNumber}`);
         }
 
-        const updated = await tx.inventory.update({
-          where: { id: inventoryItem.id },
+        // 2️⃣ Prevent double-selling
+        if (serialSim.status === 'sold') {
+          throw new Error(`Serial-SIM already sold: ${item.serialNumber}`);
+        }
+
+        // 3️⃣ Mark SerialSim as sold
+        await tx.serialSim.update({
+          where: { id: serialSim.id },
           data: { status: 'sold' },
         });
 
-        updatedInventory.push(updated);
-      }
-
-      // Calculate total sale price
-      const totalPrice = parseFloat(salePrice);
-
-      // Create sale record
-      const sale = await tx.sale.create({
-        data: {
-          dealerId: dealerId ? parseInt(dealerId) : null,
-          clientName,
-          totalPrice,
-          saleDate: new Date(saleDate),
-          userId: userId || null,
-          negotiatedPrice: totalPrice,
-        },
-      });
-
-      // Link sale items
-      for (const inv of updatedInventory) {
-        await tx.saleItem.create({
+        // 4️⃣ Create the Sale record
+        const sale = await tx.sale.create({
           data: {
-            saleId: sale.id,
-            inventoryId: inv.id,
+            productId: serialSim.inventoryId,
+            userId: userId || null,
+            dealerId: dealerId ? parseInt(dealerId) : null,
+            quantity: item.quantity,
+            totalPrice: negotiatedPrice || 0,
+            negotiatedPrice: negotiatedPrice || 0,
+            serialNumber: item.serialNumber,
+            simNumber: item.simNumber,
+            isDirectSale: !!isDirectSale,
           },
+        });
+
+        createdSales.push({
+          sale,
+          serialSim: { ...serialSim, status: 'sold' },
         });
       }
 
-      return sale;
+      return createdSales;
     });
 
     res.status(201).json({
-      message: 'Sale created successfully',
+      message: 'Sale(s) created successfully',
       data: result,
     });
   } catch (err) {
@@ -88,11 +87,10 @@ const getSales = async (req, res) => {
     const sales = await prisma.sale.findMany({
       include: {
         dealer: true,
-        saleItems: {
-          include: { inventory: true },
-        },
+        product: true,
+        user: true,
       },
-      orderBy: { saleDate: 'desc' },
+      orderBy: { createdAt: 'desc' },
     });
 
     res.status(200).json(sales);
