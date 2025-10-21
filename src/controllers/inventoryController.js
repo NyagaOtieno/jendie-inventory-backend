@@ -17,8 +17,16 @@ export const getAllInventory = async (req, res) => {
       ? {
           OR: [
             { model: { contains: search, mode: 'insensitive' } },
-            { serialNumber: { contains: search, mode: 'insensitive' } },
-            { simNumber: { contains: search, mode: 'insensitive' } },
+            {
+              serialSims: {
+                some: {
+                  OR: [
+                    { serialNumber: { contains: search, mode: 'insensitive' } },
+                    { simNumber: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            },
           ],
         }
       : {};
@@ -29,6 +37,7 @@ export const getAllInventory = async (req, res) => {
         orderBy: { createdAt: 'desc' },
         skip,
         take: pageSize,
+        include: { serialSims: true },
       }),
       prisma.inventory.count({ where }),
     ]);
@@ -52,14 +61,17 @@ export const getAllInventory = async (req, res) => {
 
 /**
  * GET /api/inventory/:id
- * Fetch a single inventory item by ID
+ * Fetch a single inventory item by ID (with serial–SIM pairs)
  */
 export const getInventoryById = async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!id) return res.status(400).json({ message: 'Invalid inventory ID' });
 
-    const item = await prisma.inventory.findUnique({ where: { id } });
+    const item = await prisma.inventory.findUnique({
+      where: { id },
+      include: { serialSims: true },
+    });
     if (!item) return res.status(404).json({ message: 'Inventory item not found' });
 
     res.status(200).json(item);
@@ -74,45 +86,65 @@ export const getInventoryById = async (req, res) => {
 
 /**
  * POST /api/inventory
- * Create a new inventory record (serial–SIM linked)
+ * Create a new inventory with multiple serial–SIM pairs
  */
 export const createInventory = async (req, res) => {
   try {
-    const { serialNumber, simNumber, model, quantity, dateAdded } = req.body;
+    const { model, serialSimPairs } = req.body;
 
-    if (!serialNumber || !simNumber || !model || !quantity) {
+    if (!model || !Array.isArray(serialSimPairs) || serialSimPairs.length === 0) {
       return res.status(400).json({
-        message: 'Missing required fields: serialNumber, simNumber, model, quantity',
+        message: 'Missing required fields: model and serialSimPairs[]',
       });
     }
 
-    // Ensure unique Serial ↔ SIM binding
-    const existing = await prisma.inventory.findFirst({
+    // Validate duplicates in request
+    const serials = serialSimPairs.map((p) => p.serialNumber);
+    const sims = serialSimPairs.map((p) => p.simNumber);
+    if (new Set(serials).size !== serials.length || new Set(sims).size !== sims.length) {
+      return res.status(400).json({
+        message: 'Duplicate serial or SIM numbers in request',
+      });
+    }
+
+    // Check for conflicts in DB
+    const existing = await prisma.serialSim.findMany({
       where: {
-        OR: [{ serialNumber }, { simNumber }],
+        OR: [
+          { serialNumber: { in: serials } },
+          { simNumber: { in: sims } },
+        ],
       },
     });
 
-    if (existing) {
+    if (existing.length > 0) {
       return res.status(400).json({
-        message:
-          'Serial Number or SIM Card Number already exists or is linked to another device',
+        message: 'Some serial or SIM numbers already exist in the system',
       });
     }
 
-    const newItem = await prisma.inventory.create({
-      data: {
-        serialNumber,
-        simNumber,
-        model,
-        quantity: Number(quantity),
-        dateAdded: dateAdded ? new Date(dateAdded) : new Date(),
-      },
+    const newInventory = await prisma.$transaction(async (tx) => {
+      const createdInventory = await tx.inventory.create({
+        data: {
+          model,
+          quantity: serialSimPairs.length,
+        },
+      });
+
+      await tx.serialSim.createMany({
+        data: serialSimPairs.map((pair) => ({
+          serialNumber: pair.serialNumber,
+          simNumber: pair.simNumber,
+          inventoryId: createdInventory.id,
+        })),
+      });
+
+      return createdInventory;
     });
 
     res.status(201).json({
-      message: '✅ Inventory item created successfully',
-      data: newItem,
+      message: '✅ Inventory created successfully with serial–SIM pairs',
+      data: newInventory,
     });
   } catch (error) {
     console.error('❌ Error creating inventory item:', error);
@@ -125,43 +157,85 @@ export const createInventory = async (req, res) => {
 
 /**
  * PUT /api/inventory/:id
- * Update an inventory record
+ * Update inventory and synchronize serial–SIM pairs
  */
 export const updateInventory = async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (!id) return res.status(400).json({ message: 'Invalid ID format' });
+    if (!id) return res.status(400).json({ message: 'Invalid inventory ID' });
 
-    const { serialNumber, simNumber, model, quantity, dateAdded } = req.body;
+    const { model, serialSimPairs } = req.body;
 
-    const exists = await prisma.inventory.findUnique({ where: { id } });
-    if (!exists) return res.status(404).json({ message: 'Inventory item not found' });
-
-    // Prevent duplicates
-    const duplicate = await prisma.inventory.findFirst({
-      where: {
-        AND: [
-          { id: { not: id } },
-          { OR: [{ serialNumber }, { simNumber }] },
-        ],
-      },
-    });
-
-    if (duplicate) {
-      return res.status(400).json({
-        message: 'Serial or SIM number already assigned to another item',
-      });
-    }
-
-    const updated = await prisma.inventory.update({
+    const inventory = await prisma.inventory.findUnique({
       where: { id },
-      data: {
-        serialNumber: serialNumber ?? exists.serialNumber,
-        simNumber: simNumber ?? exists.simNumber,
-        model: model ?? exists.model,
-        quantity: quantity ? Number(quantity) : exists.quantity,
-        dateAdded: dateAdded ? new Date(dateAdded) : exists.dateAdded,
-      },
+      include: { serialSims: true },
+    });
+    if (!inventory) return res.status(404).json({ message: 'Inventory item not found' });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const updatedInventory = await tx.inventory.update({
+        where: { id },
+        data: { model },
+      });
+
+      if (serialSimPairs && serialSimPairs.length > 0) {
+        // Validate duplicates
+        const serials = serialSimPairs.map((p) => p.serialNumber);
+        const sims = serialSimPairs.map((p) => p.simNumber);
+        if (new Set(serials).size !== serials.length || new Set(sims).size !== sims.length) {
+          throw new Error('Duplicate serial or SIM numbers in request');
+        }
+
+        // Delete removed pairs
+        const toRemove = inventory.serialSims.filter(
+          (p) => !serials.includes(p.serialNumber)
+        );
+        if (toRemove.length > 0) {
+          await tx.serialSim.deleteMany({
+            where: { id: { in: toRemove.map((r) => r.id) } },
+          });
+        }
+
+        // Add new pairs (check conflicts)
+        const conflicts = await tx.serialSim.findMany({
+          where: {
+            OR: [
+              { serialNumber: { in: serials } },
+              { simNumber: { in: sims } },
+            ],
+            NOT: { inventoryId: id },
+          },
+        });
+        if (conflicts.length > 0) {
+          throw new Error('Some serial or SIM numbers already exist elsewhere');
+        }
+
+        const toAdd = serialSimPairs.filter(
+          (p) => !inventory.serialSims.find((e) => e.serialNumber === p.serialNumber)
+        );
+
+        if (toAdd.length > 0) {
+          await tx.serialSim.createMany({
+            data: toAdd.map((p) => ({
+              serialNumber: p.serialNumber,
+              simNumber: p.simNumber,
+              inventoryId: id,
+            })),
+          });
+        }
+
+        // Sync quantity
+        const finalCount = await tx.serialSim.count({
+          where: { inventoryId: id },
+        });
+
+        await tx.inventory.update({
+          where: { id },
+          data: { quantity: finalCount },
+        });
+      }
+
+      return updatedInventory;
     });
 
     res.status(200).json({
@@ -179,7 +253,7 @@ export const updateInventory = async (req, res) => {
 
 /**
  * DELETE /api/inventory/:id
- * Delete inventory record
+ * Delete inventory and its serial–SIM pairs
  */
 export const deleteInventory = async (req, res) => {
   try {
@@ -189,9 +263,12 @@ export const deleteInventory = async (req, res) => {
     const exists = await prisma.inventory.findUnique({ where: { id } });
     if (!exists) return res.status(404).json({ message: 'Inventory item not found' });
 
-    await prisma.inventory.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.serialSim.deleteMany({ where: { inventoryId: id } });
+      await tx.inventory.delete({ where: { id } });
+    });
 
-    res.status(200).json({ message: '✅ Inventory item deleted successfully' });
+    res.status(200).json({ message: '✅ Inventory item and serial–SIM pairs deleted successfully' });
   } catch (error) {
     console.error('❌ Error deleting inventory:', error);
     res.status(500).json({

@@ -44,16 +44,28 @@ model Dealer {
 // Inventory: Pure stock table
 // --------------------------------------
 model Inventory {
-  id           Int      @id @default(autoincrement())
-  serialNumber String   @unique
-  simNumber    String   @unique
-  model        String
-  quantity     Int      @default(1)
-  dateAdded    DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  model     String
+  quantity  Int      @default(1)
+  dateAdded DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  sales Sale[]
+  // 👇 One inventory record can have multiple serial–SIM pairs
+  serialSims SerialSim[]
+  sales      Sale[]
+}
+
+model SerialSim {
+  id           Int    @id @default(autoincrement())
+  serialNumber String @unique
+  simNumber    String @unique
+  inventoryId  Int
+
+  // 👇 Relationship to Inventory
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
+
+  createdAt DateTime @default(now())
 }
 
 // --------------------------------------
