@@ -1,11 +1,13 @@
-// Specify the database provider
+// -----------------------------
+// Prisma Generator & Datasource
+// -----------------------------
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL") // Add your PostgreSQL URL in .env
+  url      = env("DATABASE_URL")
 }
 
 // -----------------------------
@@ -20,43 +22,58 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Optional relation to Sales if you want to track who made the sale
-  sales     Sale[]
+  sales Sale[]
 }
 
+// --------------------------------------
+// Dealer: Has pricing, can appear in sales
+// --------------------------------------
 model Dealer {
   id        Int      @id @default(autoincrement())
   name      String
   email     String   @unique
-  phone     String?  // Optional phone number
+  phone     String?
+  price     Float    @default(0.0) // ✅ Dealer's default unit price
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  inventory Inventory[] // One dealer can have multiple inventory items
+  sales Sale[] // ✅ One dealer can appear in multiple sales
 }
 
+// --------------------------------------
+// Inventory: Pure stock table
+// --------------------------------------
 model Inventory {
-  id        Int      @id @default(autoincrement())
-  name      String
-  quantity  Int
-  price     Float
-  dealerId  Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  serialNumber String   @unique
+  simNumber    String   @unique
+  model        String
+  quantity     Int      @default(1)
+  dateAdded    DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  dealer    Dealer   @relation(fields: [dealerId], references: [id])
-  sales     Sale[]
+  sales Sale[]
 }
 
+// --------------------------------------
+// Sale: Connects inventory, dealer (optional), and user
+// --------------------------------------
 model Sale {
-  id         Int      @id @default(autoincrement())
-  productId  Int
-  quantity   Int
-  totalPrice Float
-  userId     Int?     // Optional, if you want to track which user made the sale
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  productId       Int
+  userId          Int
+  dealerId        Int? // ✅ Optional – null if direct sale
+  quantity        Int
+  totalPrice      Float
+  negotiatedPrice Float? // ✅ Optional – overrides dealer.price or product price
+  serialNumber    String
+  simNumber       String
+  isDirectSale    Boolean  @default(false)
+  createdAt       DateTime @default(now())
 
-  product    Inventory @relation(fields: [productId], references: [id])
-  user       User?     @relation(fields: [userId], references: [id])
+  // ✅ Relationships
+  product Inventory @relation(fields: [productId], references: [id])
+  user    User      @relation(fields: [userId], references: [id])
+  dealer  Dealer?   @relation(fields: [dealerId], references: [id])
 }

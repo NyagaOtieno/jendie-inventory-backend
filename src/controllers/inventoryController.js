@@ -1,33 +1,31 @@
 import { PrismaClient } from '@prisma/client';
-
 const prisma = new PrismaClient();
 
 /**
  * GET /api/inventory
- * Fetch all inventory items with dealer details, supports pagination & search
+ * Fetch all inventory items (with pagination + search)
  */
 export const getAllInventory = async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '' } = req.query;
 
-    const pageNumber = parseInt(page);
-    const pageSize = parseInt(limit);
+    const pageNumber = Number(page);
+    const pageSize = Number(limit);
     const skip = (pageNumber - 1) * pageSize;
 
     const where = search
       ? {
           OR: [
-            { name: { contains: search, mode: 'insensitive' } },
+            { model: { contains: search, mode: 'insensitive' } },
             { serialNumber: { contains: search, mode: 'insensitive' } },
-            { dealer: { name: { contains: search, mode: 'insensitive' } } },
+            { simNumber: { contains: search, mode: 'insensitive' } },
           ],
         }
       : {};
 
-    const [inventory, total] = await Promise.all([
+    const [items, total] = await Promise.all([
       prisma.inventory.findMany({
         where,
-        include: { dealer: true },
         orderBy: { createdAt: 'desc' },
         skip,
         take: pageSize,
@@ -36,7 +34,7 @@ export const getAllInventory = async (req, res) => {
     ]);
 
     return res.status(200).json({
-      data: inventory,
+      data: items,
       meta: {
         total,
         currentPage: pageNumber,
@@ -45,7 +43,7 @@ export const getAllInventory = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error fetching inventory list:', error);
-    return res.status(500).json({
+    res.status(500).json({
       message: 'Failed to fetch inventory list',
       error: error.message,
     });
@@ -58,24 +56,16 @@ export const getAllInventory = async (req, res) => {
  */
 export const getInventoryById = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid or missing inventory ID' });
-    }
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ message: 'Invalid inventory ID' });
 
-    const item = await prisma.inventory.findUnique({
-      where: { id },
-      include: { dealer: true },
-    });
+    const item = await prisma.inventory.findUnique({ where: { id } });
+    if (!item) return res.status(404).json({ message: 'Inventory item not found' });
 
-    if (!item) {
-      return res.status(404).json({ message: 'Inventory item not found' });
-    }
-
-    return res.status(200).json(item);
+    res.status(200).json(item);
   } catch (error) {
     console.error('❌ Error fetching inventory item:', error);
-    return res.status(500).json({
+    res.status(500).json({
       message: 'Failed to fetch inventory item',
       error: error.message,
     });
@@ -84,43 +74,49 @@ export const getInventoryById = async (req, res) => {
 
 /**
  * POST /api/inventory
- * Create a new inventory record
+ * Create a new inventory record (serial–SIM linked)
  */
 export const createInventory = async (req, res) => {
   try {
-    const { name, quantity, price, serialNumber, dealerId } = req.body;
+    const { serialNumber, simNumber, model, quantity, dateAdded } = req.body;
 
-    if (!name || !serialNumber || !dealerId) {
+    if (!serialNumber || !simNumber || !model || !quantity) {
       return res.status(400).json({
-        message: 'Missing required fields: name, serialNumber, dealerId',
+        message: 'Missing required fields: serialNumber, simNumber, model, quantity',
       });
     }
 
-    const existing = await prisma.inventory.findUnique({
-      where: { serialNumber },
+    // Ensure unique Serial ↔ SIM binding
+    const existing = await prisma.inventory.findFirst({
+      where: {
+        OR: [{ serialNumber }, { simNumber }],
+      },
     });
 
     if (existing) {
       return res.status(400).json({
-        message: 'An item with this serial number already exists',
+        message:
+          'Serial Number or SIM Card Number already exists or is linked to another device',
       });
     }
 
     const newItem = await prisma.inventory.create({
       data: {
-        name,
-        quantity: parseInt(quantity) || 0,
-        price: parseFloat(price) || 0,
         serialNumber,
-        dealerId: parseInt(dealerId),
+        simNumber,
+        model,
+        quantity: Number(quantity),
+        dateAdded: dateAdded ? new Date(dateAdded) : new Date(),
       },
-      include: { dealer: true },
     });
 
-    return res.status(201).json(newItem);
+    res.status(201).json({
+      message: '✅ Inventory item created successfully',
+      data: newItem,
+    });
   } catch (error) {
     console.error('❌ Error creating inventory item:', error);
-    return res.status(500).json({
+    res.status(500).json({
       message: 'Failed to create inventory item',
       error: error.message,
     });
@@ -129,35 +125,52 @@ export const createInventory = async (req, res) => {
 
 /**
  * PUT /api/inventory/:id
- * Update an existing inventory record
+ * Update an inventory record
  */
 export const updateInventory = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID format' });
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ message: 'Invalid ID format' });
 
-    const { name, quantity, price, dealerId } = req.body;
+    const { serialNumber, simNumber, model, quantity, dateAdded } = req.body;
 
     const exists = await prisma.inventory.findUnique({ where: { id } });
-    if (!exists) {
-      return res.status(404).json({ message: 'Inventory item not found' });
+    if (!exists) return res.status(404).json({ message: 'Inventory item not found' });
+
+    // Prevent duplicates
+    const duplicate = await prisma.inventory.findFirst({
+      where: {
+        AND: [
+          { id: { not: id } },
+          { OR: [{ serialNumber }, { simNumber }] },
+        ],
+      },
+    });
+
+    if (duplicate) {
+      return res.status(400).json({
+        message: 'Serial or SIM number already assigned to another item',
+      });
     }
 
     const updated = await prisma.inventory.update({
       where: { id },
       data: {
-        name: name ?? exists.name,
-        quantity: quantity !== undefined ? parseInt(quantity) : exists.quantity,
-        price: price !== undefined ? parseFloat(price) : exists.price,
-        dealerId: dealerId ? parseInt(dealerId) : exists.dealerId,
+        serialNumber: serialNumber ?? exists.serialNumber,
+        simNumber: simNumber ?? exists.simNumber,
+        model: model ?? exists.model,
+        quantity: quantity ? Number(quantity) : exists.quantity,
+        dateAdded: dateAdded ? new Date(dateAdded) : exists.dateAdded,
       },
-      include: { dealer: true },
     });
 
-    return res.status(200).json(updated);
+    res.status(200).json({
+      message: '✅ Inventory updated successfully',
+      data: updated,
+    });
   } catch (error) {
     console.error('❌ Error updating inventory:', error);
-    return res.status(500).json({
+    res.status(500).json({
       message: 'Failed to update inventory item',
       error: error.message,
     });
@@ -166,25 +179,22 @@ export const updateInventory = async (req, res) => {
 
 /**
  * DELETE /api/inventory/:id
- * Delete a single inventory record
+ * Delete inventory record
  */
 export const deleteInventory = async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid ID format' });
-    }
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ message: 'Invalid ID format' });
 
     const exists = await prisma.inventory.findUnique({ where: { id } });
-    if (!exists) {
-      return res.status(404).json({ message: 'Inventory item not found' });
-    }
+    if (!exists) return res.status(404).json({ message: 'Inventory item not found' });
 
     await prisma.inventory.delete({ where: { id } });
-    return res.status(200).json({ message: 'Inventory item deleted successfully' });
+
+    res.status(200).json({ message: '✅ Inventory item deleted successfully' });
   } catch (error) {
     console.error('❌ Error deleting inventory:', error);
-    return res.status(500).json({
+    res.status(500).json({
       message: 'Failed to delete inventory item',
       error: error.message,
     });
