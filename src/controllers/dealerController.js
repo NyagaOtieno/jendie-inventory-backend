@@ -1,7 +1,8 @@
 // src/controllers/dealerController.js
-const prisma = require('../prismaClient');
+import prisma from '../prismaClient.js';
 
-const createDealer = async (req, res) => {
+// Create a new dealer
+export const createDealer = async (req, res) => {
   try {
     const { name, email, phone } = req.body;
     const existing = await prisma.dealer.findUnique({ where: { email } });
@@ -17,7 +18,8 @@ const createDealer = async (req, res) => {
   }
 };
 
-const getDealers = async (req, res) => {
+// Get all dealers
+export const getDealers = async (req, res) => {
   try {
     const dealers = await prisma.dealer.findMany({
       include: { inventory: true },
@@ -29,4 +31,54 @@ const getDealers = async (req, res) => {
   }
 };
 
-module.exports = { createDealer, getDealers };
+// Get single dealer by ID
+export const getDealerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const dealer = await prisma.dealer.findUnique({
+      where: { id: Number(id) },
+      include: { inventory: true },
+    });
+    if (!dealer) return res.status(404).json({ message: 'Dealer not found' });
+    res.json(dealer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Update dealer by ID
+export const updateDealer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone } = req.body;
+
+    const dealer = await prisma.dealer.update({
+      where: { id: Number(id) },
+      data: { name, email, phone },
+    });
+
+    res.json(dealer);
+  } catch (err) {
+    console.error(err);
+    if (err.code === 'P2025') {
+      return res.status(404).json({ message: 'Dealer not found' });
+    }
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Delete dealer by ID
+export const deleteDealer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.dealer.delete({ where: { id: Number(id) } });
+    res.json({ message: 'Dealer deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    if (err.code === 'P2025') {
+      return res.status(404).json({ message: 'Dealer not found' });
+    }
+    res.status(500).json({ message: 'Server error' });
+  }
+};

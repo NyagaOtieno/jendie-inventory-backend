@@ -1,8 +1,28 @@
-const express = require('express');
-const { getDealers, createDealer } = require('../controllers/dealerController');
+// src/routes/dealerRoutes.js
+import express from 'express';
+import {
+  getDealers,
+  createDealer,
+  getDealerById,
+  updateDealer,
+  deleteDealer,
+} from '../controllers/dealerController.js';
+
 const router = express.Router();
 
+// List all dealers
 router.get('/', getDealers);
+
+// Get single dealer by ID
+router.get('/:id', getDealerById);
+
+// Create a new dealer
 router.post('/', createDealer);
 
-module.exports = router;
+// Update an existing dealer
+router.put('/:id', updateDealer);
+
+// Delete a dealer
+router.delete('/:id', deleteDealer);
+
+export default router;
