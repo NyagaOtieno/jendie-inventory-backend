@@ -1,9 +1,9 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+// src/controllers/inventoryController.js
+import prisma from '../prismaClient.js';
 
 /**
  * GET /api/inventory
- * Fetch all inventory items (with pagination + search)
+ * Fetch all inventory items with pagination + search
  */
 export const getAllInventory = async (req, res) => {
   try {
@@ -42,7 +42,7 @@ export const getAllInventory = async (req, res) => {
       prisma.inventory.count({ where }),
     ]);
 
-    return res.status(200).json({
+    res.status(200).json({
       data: items,
       meta: {
         total,
@@ -51,7 +51,7 @@ export const getAllInventory = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('❌ Error fetching inventory list:', error);
+    console.error('Error fetching inventory list:', error);
     res.status(500).json({
       message: 'Failed to fetch inventory list',
       error: error.message,
@@ -61,7 +61,7 @@ export const getAllInventory = async (req, res) => {
 
 /**
  * GET /api/inventory/:id
- * Fetch a single inventory item by ID (with serial–SIM pairs)
+ * Fetch a single inventory item by ID
  */
 export const getInventoryById = async (req, res) => {
   try {
@@ -72,11 +72,12 @@ export const getInventoryById = async (req, res) => {
       where: { id },
       include: { serialSims: true },
     });
+
     if (!item) return res.status(404).json({ message: 'Inventory item not found' });
 
     res.status(200).json(item);
   } catch (error) {
-    console.error('❌ Error fetching inventory item:', error);
+    console.error('Error fetching inventory item:', error);
     res.status(500).json({
       message: 'Failed to fetch inventory item',
       error: error.message,
@@ -98,43 +99,32 @@ export const createInventory = async (req, res) => {
       });
     }
 
-    // Validate duplicates in request
+    // Check for duplicates in request
     const serials = serialSimPairs.map((p) => p.serialNumber);
     const sims = serialSimPairs.map((p) => p.simNumber);
+
     if (new Set(serials).size !== serials.length || new Set(sims).size !== sims.length) {
-      return res.status(400).json({
-        message: 'Duplicate serial or SIM numbers in request',
-      });
+      return res.status(400).json({ message: 'Duplicate serial or SIM numbers in request' });
     }
 
-    // Check for conflicts in DB
+    // Check for existing conflicts in DB
     const existing = await prisma.serialSim.findMany({
-      where: {
-        OR: [
-          { serialNumber: { in: serials } },
-          { simNumber: { in: sims } },
-        ],
-      },
+      where: { OR: [{ serialNumber: { in: serials } }, { simNumber: { in: sims } }] },
     });
 
     if (existing.length > 0) {
-      return res.status(400).json({
-        message: 'Some serial or SIM numbers already exist in the system',
-      });
+      return res.status(400).json({ message: 'Some serial or SIM numbers already exist' });
     }
 
     const newInventory = await prisma.$transaction(async (tx) => {
       const createdInventory = await tx.inventory.create({
-        data: {
-          model,
-          quantity: serialSimPairs.length,
-        },
+        data: { model, quantity: serialSimPairs.length },
       });
 
       await tx.serialSim.createMany({
-        data: serialSimPairs.map((pair) => ({
-          serialNumber: pair.serialNumber,
-          simNumber: pair.simNumber,
+        data: serialSimPairs.map((p) => ({
+          serialNumber: p.serialNumber,
+          simNumber: p.simNumber,
           inventoryId: createdInventory.id,
         })),
       });
@@ -143,15 +133,12 @@ export const createInventory = async (req, res) => {
     });
 
     res.status(201).json({
-      message: '✅ Inventory created successfully with serial–SIM pairs',
+      message: 'Inventory created successfully',
       data: newInventory,
     });
   } catch (error) {
-    console.error('❌ Error creating inventory item:', error);
-    res.status(500).json({
-      message: 'Failed to create inventory item',
-      error: error.message,
-    });
+    console.error('Error creating inventory:', error);
+    res.status(500).json({ message: 'Failed to create inventory', error: error.message });
   }
 };
 
@@ -170,46 +157,41 @@ export const updateInventory = async (req, res) => {
       where: { id },
       include: { serialSims: true },
     });
+
     if (!inventory) return res.status(404).json({ message: 'Inventory item not found' });
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const updatedInventory = await tx.inventory.update({
-        where: { id },
-        data: { model },
-      });
+    const updatedInventory = await prisma.$transaction(async (tx) => {
+      // Update inventory model
+      await tx.inventory.update({ where: { id }, data: { model } });
 
       if (serialSimPairs && serialSimPairs.length > 0) {
         // Validate duplicates
         const serials = serialSimPairs.map((p) => p.serialNumber);
         const sims = serialSimPairs.map((p) => p.simNumber);
+
         if (new Set(serials).size !== serials.length || new Set(sims).size !== sims.length) {
           throw new Error('Duplicate serial or SIM numbers in request');
         }
 
         // Delete removed pairs
-        const toRemove = inventory.serialSims.filter(
-          (p) => !serials.includes(p.serialNumber)
-        );
+        const toRemove = inventory.serialSims.filter((p) => !serials.includes(p.serialNumber));
         if (toRemove.length > 0) {
-          await tx.serialSim.deleteMany({
-            where: { id: { in: toRemove.map((r) => r.id) } },
-          });
+          await tx.serialSim.deleteMany({ where: { id: { in: toRemove.map((r) => r.id) } } });
         }
 
-        // Add new pairs (check conflicts)
+        // Check conflicts for new pairs
         const conflicts = await tx.serialSim.findMany({
           where: {
-            OR: [
-              { serialNumber: { in: serials } },
-              { simNumber: { in: sims } },
-            ],
+            OR: [{ serialNumber: { in: serials } }, { simNumber: { in: sims } }],
             NOT: { inventoryId: id },
           },
         });
+
         if (conflicts.length > 0) {
           throw new Error('Some serial or SIM numbers already exist elsewhere');
         }
 
+        // Add new pairs
         const toAdd = serialSimPairs.filter(
           (p) => !inventory.serialSims.find((e) => e.serialNumber === p.serialNumber)
         );
@@ -224,30 +206,18 @@ export const updateInventory = async (req, res) => {
           });
         }
 
-        // Sync quantity
-        const finalCount = await tx.serialSim.count({
-          where: { inventoryId: id },
-        });
-
-        await tx.inventory.update({
-          where: { id },
-          data: { quantity: finalCount },
-        });
+        // Update quantity
+        const finalCount = await tx.serialSim.count({ where: { inventoryId: id } });
+        await tx.inventory.update({ where: { id }, data: { quantity: finalCount } });
       }
 
-      return updatedInventory;
+      return await tx.inventory.findUnique({ where: { id }, include: { serialSims: true } });
     });
 
-    res.status(200).json({
-      message: '✅ Inventory updated successfully',
-      data: updated,
-    });
+    res.status(200).json({ message: 'Inventory updated successfully', data: updatedInventory });
   } catch (error) {
-    console.error('❌ Error updating inventory:', error);
-    res.status(500).json({
-      message: 'Failed to update inventory item',
-      error: error.message,
-    });
+    console.error('Error updating inventory:', error);
+    res.status(500).json({ message: 'Failed to update inventory', error: error.message });
   }
 };
 
@@ -268,12 +238,9 @@ export const deleteInventory = async (req, res) => {
       await tx.inventory.delete({ where: { id } });
     });
 
-    res.status(200).json({ message: '✅ Inventory item and serial–SIM pairs deleted successfully' });
+    res.status(200).json({ message: 'Inventory and serial–SIM pairs deleted successfully' });
   } catch (error) {
-    console.error('❌ Error deleting inventory:', error);
-    res.status(500).json({
-      message: 'Failed to delete inventory item',
-      error: error.message,
-    });
+    console.error('Error deleting inventory:', error);
+    res.status(500).json({ message: 'Failed to delete inventory', error: error.message });
   }
 };

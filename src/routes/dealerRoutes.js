@@ -10,6 +10,7 @@ import {
 
 const router = express.Router();
 
+// CRUD routes
 router.get('/', getDealers);
 router.get('/:id', getDealerById);
 router.post('/', createDealer);
