@@ -10,11 +10,23 @@ import {
 
 const router = express.Router();
 
-// CRUD routes
+// -----------------------------
+// Dealer CRUD routes
+// -----------------------------
+
+// GET all dealers
 router.get('/', getDealers);
+
+// GET single dealer by ID
 router.get('/:id', getDealerById);
+
+// POST create new dealer
 router.post('/', createDealer);
+
+// PUT update dealer by ID
 router.put('/:id', updateDealer);
+
+// DELETE dealer by ID
 router.delete('/:id', deleteDealer);
 
 export default router;

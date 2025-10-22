@@ -1,4 +1,3 @@
-// src/controllers/dealerController.js
 import prisma from '../prismaClient.js';
 
 /**
@@ -9,6 +8,7 @@ export const getDealers = async (req, res) => {
   try {
     const dealers = await prisma.dealer.findMany({
       orderBy: { createdAt: 'desc' },
+      include: { sales: true },
     });
     res.status(200).json({
       message: '✅ Dealers fetched successfully',
@@ -29,7 +29,10 @@ export const getDealerById = async (req, res) => {
     const id = Number(req.params.id);
     if (!id) return res.status(400).json({ message: 'Invalid dealer ID' });
 
-    const dealer = await prisma.dealer.findUnique({ where: { id } });
+    const dealer = await prisma.dealer.findUnique({
+      where: { id },
+      include: { sales: true },
+    });
     if (!dealer) return res.status(404).json({ message: 'Dealer not found' });
 
     res.status(200).json({
@@ -50,7 +53,10 @@ export const createDealer = async (req, res) => {
   try {
     const { name, email, phone, price = 0 } = req.body;
 
-    // Validate price
+    // Validate mandatory fields
+    if (!name || !email) return res.status(400).json({ message: 'Name and email are required' });
+
+    // Convert price safely
     const floatPrice = parseFloat(price);
     if (isNaN(floatPrice)) return res.status(400).json({ message: 'Price must be a number' });
 
@@ -80,22 +86,28 @@ export const updateDealer = async (req, res) => {
     const id = Number(req.params.id);
     if (!id) return res.status(400).json({ message: 'Invalid dealer ID' });
 
-    let { name, email, phone, price } = req.body;
+    const { name, email, phone, price } = req.body;
 
     // Convert price safely
+    let floatPrice;
     if (price !== undefined) {
-      price = parseFloat(price);
-      if (isNaN(price)) return res.status(400).json({ message: 'Price must be a number' });
+      floatPrice = parseFloat(price);
+      if (isNaN(floatPrice)) return res.status(400).json({ message: 'Price must be a number' });
     }
 
-    const updated = await prisma.dealer.update({
+    const updatedDealer = await prisma.dealer.update({
       where: { id },
-      data: { name, email, phone, price },
+      data: {
+        name,
+        email,
+        phone,
+        price: floatPrice,
+      },
     });
 
     res.status(200).json({
       message: '✅ Dealer updated successfully',
-      data: updated,
+      data: updatedDealer,
     });
   } catch (err) {
     console.error('❌ Error updating dealer:', err);
