@@ -1,13 +1,23 @@
-// src/controllers/saleController.js
 const prisma = require('../prismaClient');
+const path = require('path');
 
 /**
  * ✅ Create Sale
  * Supports dealer or direct sale
  * Marks SerialSim as sold and rolls back if any step fails
+ * Supports optional POP document upload
  */
 const createSale = async (req, res) => {
-  const { dealerId, userId, saleItems, negotiatedPrice, isDirectSale } = req.body;
+  let { dealerId, userId, saleItems, negotiatedPrice, isDirectSale } = req.body;
+
+  // Parse saleItems if sent as JSON string
+  if (typeof saleItems === 'string') {
+    try {
+      saleItems = JSON.parse(saleItems);
+    } catch (err) {
+      return res.status(400).json({ message: 'Invalid saleItems format' });
+    }
+  }
 
   if (!saleItems || !saleItems.length) {
     return res.status(400).json({ message: 'No sale items provided.' });
@@ -23,7 +33,7 @@ const createSale = async (req, res) => {
           where: {
             serialNumber: item.serialNumber,
             simNumber: item.simNumber,
-            status: 'available', // only allow available SerialSims
+            status: 'available',
           },
           include: { inventory: true },
         });
@@ -40,11 +50,14 @@ const createSale = async (req, res) => {
           data: { status: 'sold' },
         });
 
-        // 3️⃣ Create the Sale record
+        // 3️⃣ Handle POP document (same file for all items in this request)
+        const popDocument = req.file ? `/uploads/pop/${req.file.filename}` : null;
+
+        // 4️⃣ Create the Sale record
         const sale = await tx.sale.create({
           data: {
             productId: serialSim.inventoryId,
-            userId: userId || null,
+            userId: userId ? parseInt(userId) : null,
             dealerId: dealerId ? parseInt(dealerId) : null,
             quantity: item.quantity,
             totalPrice: negotiatedPrice || 0,
@@ -52,12 +65,14 @@ const createSale = async (req, res) => {
             serialNumber: item.serialNumber,
             simNumber: item.simNumber,
             isDirectSale: !!isDirectSale,
+            popDocument,
           },
         });
 
         createdSales.push({
           sale,
           serialSim: updatedSerialSim,
+          popDocument,
         });
       }
 

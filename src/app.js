@@ -2,6 +2,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import authRoutes from './routes/authRoutes.js';
 import dealerRoutes from './routes/dealerRoutes.js';
@@ -12,10 +14,17 @@ dotenv.config();
 
 const app = express();
 
+// ✅ For resolving __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // optional, in case you receive form data
+app.use(express.urlencoded({ extended: true }));
+
+// ✅ Serve uploaded POP documents
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);

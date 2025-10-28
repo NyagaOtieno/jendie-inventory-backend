@@ -69,20 +69,23 @@ model SerialSim {
 // --------------------------------------
 // Sale: Connects inventory, dealer (optional), and user
 // --------------------------------------
+
 model Sale {
   id              Int      @id @default(autoincrement())
   productId       Int
   userId          Int
-  dealerId        Int? // ✅ Optional – null if direct sale
+  dealerId        Int? 
   quantity        Int
   totalPrice      Float
-  negotiatedPrice Float? // ✅ Optional – overrides dealer.price or product price
+  negotiatedPrice Float?
   serialNumber    String
   simNumber       String
   isDirectSale    Boolean  @default(false)
+  popDocument     String?  // <-- add this line
+
   createdAt       DateTime @default(now())
 
-  // ✅ Relationships
+  // Relations
   product Inventory @relation(fields: [productId], references: [id])
   user    User      @relation(fields: [userId], references: [id])
   dealer  Dealer?   @relation(fields: [dealerId], references: [id])
