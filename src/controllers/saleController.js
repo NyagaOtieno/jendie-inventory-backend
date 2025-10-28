@@ -1,3 +1,4 @@
+// src/controllers/saleController.js
 const prisma = require('../prismaClient');
 const path = require('path');
 
@@ -59,9 +60,9 @@ const createSale = async (req, res) => {
             productId: serialSim.inventoryId,
             userId: userId ? parseInt(userId) : null,
             dealerId: dealerId ? parseInt(dealerId) : null,
-            quantity: item.quantity,
-            totalPrice: negotiatedPrice || 0,
-            negotiatedPrice: negotiatedPrice || 0,
+            quantity: parseInt(item.quantity) || 1,
+            totalPrice: parseFloat(item.totalPrice) || 0,
+            negotiatedPrice: parseFloat(negotiatedPrice) || 0,
             serialNumber: item.serialNumber,
             simNumber: item.simNumber,
             isDirectSale: !!isDirectSale,
